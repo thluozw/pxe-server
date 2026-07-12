@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}PXE Server - 镜像管理{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💿 镜像管理</h1>
+    <p class="subtitle">上传和管理 PXE 启动镜像</p>
+</div>
+
+<!-- 上传区域 -->
+<div class="card">
+    <h2>📤 上传 ISO 镜像</h2>
+    <form action="/upload" method="post" enctype="multipart/form-data" class="upload-form">
+        <div class="file-input-wrapper">
+            <input type="file" name="file" id="file" accept=".iso" required>
+            <label for="file" class="file-label">
+                <span class="file-icon">📁</span>
+                <span class="file-text">选择 ISO 文件...</span>
+            </label>
+        </div>
+        <div class="upload-info">
+            <p>支持的文件格式: <strong>.iso</strong></p>
+            <p>最大文件大小: <strong>16 GB</strong></p>
+        </div>
+        <button type="submit" class="btn btn-primary">
+            <span>⬆️ 上传并提取</span>
+        </button>
+    </form>
+    
+    <!-- 拖拽上传 -->
+    <div class="dropzone" id="dropzone">
+        <div class="dropzone-content">
+            <span class="dropzone-icon">📂</span>
+            <p>拖拽 ISO 文件到此处上传</p>
+        </div>
+    </div>
+</div>
+
+<!-- 镜像列表 -->
+<div class="card">
+    <h2>📚 已上传的镜像</h2>
+    
+    {% if isos %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>文件名</th>
+                <th>大小</th>
+                <th>上传时间</th>
+                <th>Boot 状态</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for iso in isos %}
+            <tr>
+                <td>
+                    <span class="iso-icon">💿</span>
+                    {{ iso.name }}
+                </td>
+                <td>{{ iso.size_str }}</td>
+                <td>{{ iso.mtime }}</td>
+                <td>
+                    {% if iso.has_boot %}
+                        <span class="badge badge-success">✅ 已提取</span>
+                    {% else %}
+                        <span class="badge badge-warning">⏳ 待提取</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    {% if not iso.has_boot %}
+                    <form action="/extract/{{ iso.name }}" method="post" class="inline">
+                        <button type="submit" class="btn btn-sm btn-info" title="提取 Boot 文件">
+                            ⚙️ 提取
+                        </button>
+                    </form>
+                    {% endif %}
+                    <form action="/delete/{{ iso.name }}" method="post" class="inline" onsubmit="return confirm('确定删除 {{ iso.name }} 吗？')">
+                        <button type="submit" class="btn btn-sm btn-danger" title="删除">
+                            🗑️ 删除
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div class="card-footer">
+        <p>共 {{ isos|length }} 个镜像</p>
+        <button class="btn btn-danger-outline" onclick="deleteAll()">
+            🗑️ 删除全部
+        </button>
+    </div>
+    
+    {% else %}
+    <div class="empty-state">
+        <span class="empty-icon">📂</span>
+        <p>暂无镜像</p>
+        <p class="empty-hint">上传第一个 ISO 文件开始使用</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 常用镜像下载 -->
+<div class="card">
+    <h2>📥 常用镜像下载</h2>
+    <p class="hint">需要手动下载后上传</p>
+    <div class="download-links">
+        <div class="download-item">
+            <span class="distro-icon">🐧</span>
+            <div class="distro-info">
+                <span class="distro-name">Ubuntu Server</span>
+                <span class="distro-url">https://ubuntu.com/download/server</span>
+            </div>
+            <a href="https://ubuntu.com/download/server" target="_blank" class="btn btn-sm">下载</a>
+        </div>
+        <div class="download-item">
+            <span class="distro-icon">🎩</span>
+            <div class="distro-info">
+                <span class="distro-name">Debian</span>
+                <span class="distro-url">https://www.debian.org/distrib/</span>
+            </div>
+            <a href="https://www.debian.org/distrib/" target="_blank" class="btn btn-sm">下载</a>
+        </div>
+        <div class="download-item">
+            <span class="distro-icon">🔴</span>
+            <div class="distro-info">
+                <span class="distro-name">CentOS Stream</span>
+                <span class="distro-url">https://centos.org/download/</span>
+            </div>
+            <a href="https://centos.org/download/" target="_blank" class="btn btn-sm">下载</a>
+        </div>
+        <div class="download-item">
+            <span class="distro-icon">🦕</span>
+            <div class="distro-info">
+                <span class="distro-name">Fedora Server</span>
+                <span class="distro-url">https://fedoraproject.org/server/download</span>
+            </div>
+            <a href="https://fedoraproject.org/server/download" target="_blank" class="btn btn-sm">下载</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 拖拽上传
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file');
+const fileLabel = document.querySelector('.file-label');
+
+dropzone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', e => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        const file = files[0];
+        if (file.name.endsWith('.iso')) {
+            fileInput.files = files;
+            fileLabel.querySelector('.file-text').textContent = file.name;
+        } else {
+            alert('只支持 ISO 文件！');
+        }
+    }
+});
+
+fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) {
+        fileLabel.querySelector('.file-text').textContent = fileInput.files[0].name;
+    }
+});
+
+function deleteAll() {
+    if (confirm('确定删除全部镜像吗？此操作不可恢复！')) {
+        {% for iso in isos %}
+        fetch('/delete/{{ iso.name }}', { method: 'POST' })
+            .then(() => location.reload());
+        {% endfor %}
+    }
+}
+</script>
+{% endblock %}

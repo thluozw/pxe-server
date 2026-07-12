@@ -1,43 +1,55 @@
 # ============================================================================
-# Fnos PXE Server Docker Image
+# PXE Server Docker Image
 # ============================================================================
-# 基于 Debian Bookworm，为 Fnos (飞牛 NAS) 提供 PXE 网络安装服务
-# 
-# 架构：
+# 通用 PXE 网络安装服务器，带 WebUI 管理界面
+#
+# 功能：
+#   - WebUI: 镜像上传、服务配置、状态监控
 #   - ISC DHCP Server: 提供 IP + PXE boot 选项
-#   - TFTP Server: 提供 boot 文件 (kernel + initramfs)
-#   - NFS Server: 提供 ISO 内容 (避免下载到客户端 RAM)
+#   - TFTP Server: 提供 boot 文件
+#   - NFS Server: 提供 ISO 内容挂载
 #
 # 优势：
-#   - 客户端只需 ~512MB RAM (vs iVentoy 需要 >3.3GB)
+#   - 客户端只需 ~512MB RAM (vs iVentoy 需要 >3GB)
 #   - 支持大 ISO (如 Fnos 3.3GB)
+#   - WebUI 管理，简单易用
 # ============================================================================
 
 FROM debian:bookworm-slim
 
 LABEL maintainer="thluozw"
-LABEL description="PXE Server for Fnos installation via NFS"
+LABEL description="General PXE Server with WebUI"
 
 # 避免交互式提示
 ENV DEBIAN_FRONTEND=noninteractive
+ENV BASE_DIR=/app
+ENV SERVER_IP=192.168.8.4
+ENV WEBUI_PORT=8080
 
 # ============================================================================
 # 安装依赖
 # ============================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Python3 + Flask (WebUI)
+    python3 \
+    python3-flask \
+    python3-werkzeug \
+    \
     # 网络服务
     isc-dhcp-server \
     tftpd-hpa \
     nfs-kernel-server \
     xinetd \
     \
+    # ISO 处理
+    p7zip-full \
+    squashfs-tools \
+    genisoimage \
+    \
     # 工具
     curl \
     wget \
     unzip \
-    p7zip-full \
-    squashfs-tools \
-    genisoimage \
     \
     # 清理
     && apt-get clean \
@@ -46,65 +58,51 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ============================================================================
 # 目录结构
 # ============================================================================
-# /tftpboot      - TFTP 目录，存放 PXE boot 文件
-# /nfsroot       - NFS 共享目录，存放 ISO 内容
-# /iso           - ISO 文件存放目录
-# /scripts       - 启动脚本
-
-RUN mkdir -p /tftpboot /nfsroot /iso /scripts
+RUN mkdir -p ${BASE_DIR}/{webui/templates,webui/static/css,webui/static/js,data/{iso,boot,nfs,temp},config,scripts}
 
 # ============================================================================
-# 配置 DHCP (ISC DHCP Server)
+# 复制 WebUI
 # ============================================================================
-# DHCP 配置文件会在启动时由 start.sh 生成
+COPY --chown=root:root webui/app.py ${BASE_DIR}/webui/
+COPY --chown=root:root webui/templates/ ${BASE_DIR}/webui/templates/
+COPY --chown=root:root webui/static/ ${BASE_DIR}/webui/static/
 
 # ============================================================================
-# 配置 TFTP
+# 复制配置文件
 # ============================================================================
-# TFTP 使用 xinetd 模式，配置文件在 /etc/xinetd.d/tftp
-
-RUN mkdir -p /var/tftpboot
-RUN ln -sf /tftpboot /var/tftpboot
-
-COPY config/xinetd-tftp /etc/xinetd.d/tftp
-RUN chmod 644 /etc/xinetd.d/tftp
-
-# ============================================================================
-# 配置 NFS
-# ============================================================================
-COPY config/exports /etc/exports
+COPY --chown=root:root config/xinetd-tftp /etc/xinetd.d/tftp
+COPY --chown=root:root config/exports /etc/exports
 
 # ============================================================================
 # 复制脚本
 # ============================================================================
-COPY scripts/*.sh /scripts/
-RUN chmod +x /scripts/*.sh
+COPY --chown=root:root scripts/*.sh ${BASE_DIR}/scripts/
+RUN chmod +x ${BASE_DIR}/scripts/*.sh
+
+# ============================================================================
+# 软链接 TFTP
+# ============================================================================
+RUN ln -sf ${BASE_DIR}/data/boot /tftpboot && \
+    mkdir -p /var/tftpboot
 
 # ============================================================================
 # 健康检查
 # ============================================================================
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD /scripts/healthcheck.sh || exit 1
+    CMD curl -f http://localhost:${WEBUI_PORT}/ || exit 1
 
 # ============================================================================
-# 端口
+# 入口点
 # ============================================================================
-# DHCP: 67/udp
-# TFTP: 69/udp
-# NFS: 2049/tcp
-# Mountd: 20048/tcp (rpcbind)
+WORKDIR ${BASE_DIR}
 
-# ============================================================================
-# 卷挂载点
-# ============================================================================
-# /iso      - 存放 ISO 文件 (如 fnos_xxx.iso)
-# /tftpboot - 可选，覆盖默认 boot 文件
-# /nfsroot  - 可选，存放 NFS 共享内容
+# 启动顺序：先启动 WebUI，后台启动网络服务
+CMD python3 webui/app.py & \
+    /scripts/start-services.sh & \
+    tail -f /dev/null
 
-VOLUME ["/iso", "/tftpboot", "/nfsroot"]
+# 暴露端口
+EXPOSE 8080 67/udp 69/udp 2049/tcp 20048/tcp
 
-# ============================================================================
-# 启动命令
-# ============================================================================
-ENTRYPOINT ["/scripts/entrypoint.sh"]
-CMD []
+# 卷
+VOLUME ["${BASE_DIR}/data"]

@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}PXE Server - 状态监控{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📊 服务状态</h1>
+    <p class="subtitle">实时监控 PXE 服务器运行状态</p>
+</div>
+
+<!-- 系统信息 -->
+<div class="card">
+    <h2>🖥️ 系统信息</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <span class="label">服务器 IP</span>
+            <span class="value">{{ server_ip }}</span>
+        </div>
+        <div class="info-item">
+            <span class="label">运行时间</span>
+            <span class="value" id="uptime">{{ uptime }} 秒</span>
+        </div>
+        <div class="info-item">
+            <span class="label">系统负载</span>
+            <span class="value">{{ load }}</span>
+        </div>
+        <div class="info-item">
+            <span class="label">镜像数量</span>
+            <span class="value">{{ isos|length }} 个</span>
+        </div>
+    </div>
+</div>
+
+<!-- 服务状态 -->
+<div class="card">
+    <h2>🔧 服务状态</h2>
+    <div class="services-grid">
+        {% for key, svc in status.items() %}
+        <div class="service-item service-{{ svc.status }}">
+            <div class="service-icon">
+                {% if svc.status == 'running' %}✅{% else %}❌{% endif %}
+            </div>
+            <div class="service-info">
+                <div class="service-name">{{ svc.name }}</div>
+                <div class="service-detail">
+                    {{ svc.proto|upper }}:{{ svc.port }}
+                </div>
+            </div>
+            <div class="service-status">
+                <span class="badge badge-{{ svc.status }}">
+                    {{ svc.status }}
+                </span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <button class="btn btn-refresh" onclick="refreshStatus()">
+        🔄 刷新状态
+    </button>
+</div>
+
+<!-- 快速操作 -->
+<div class="card">
+    <h2>⚡ 快速操作</h2>
+    <div class="actions-grid">
+        <a href="/isos" class="action-btn">
+            <span class="action-icon">💿</span>
+            <span class="action-text">管理镜像</span>
+        </a>
+        <a href="/config" class="action-btn">
+            <span class="action-icon">⚙️</span>
+            <span class="action-text">服务器配置</span>
+        </a>
+        <button class="action-btn" onclick="viewLogs()">
+            <span class="action-icon">📋</span>
+            <span class="action-text">查看日志</span>
+        </button>
+        <button class="action-btn" onclick="testPXE()">
+            <span class="action-icon">🧪</span>
+            <span class="action-text">PXE 测试</span>
+        </button>
+    </div>
+</div>
+
+<!-- 最近镜像 -->
+{% if isos %}
+<div class="card">
+    <h2>💿 最近镜像</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>文件名</th>
+                <th>大小</th>
+                <th>上传时间</th>
+                <th>Boot 文件</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for iso in isos[:5] %}
+            <tr>
+                <td>{{ iso.name }}</td>
+                <td>{{ iso.size_str }}</td>
+                <td>{{ iso.mtime }}</td>
+                <td>
+                    {% if iso.has_boot %}
+                        <span class="badge badge-success">✅ 已提取</span>
+                    {% else %}
+                        <span class="badge badge-warning">⏳ 待提取</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="card-footer">
+        <a href="/isos" class="link">查看全部 {{ isos|length }} 个镜像 →</a>
+    </div>
+</div>
+{% endif %}
+
+<!-- 使用说明 -->
+<div class="card">
+    <h2>📖 使用说明</h2>
+    <div class="guide">
+        <div class="guide-step">
+            <span class="step-num">1</span>
+            <div class="step-content">
+                <h3>上传 ISO 镜像</h3>
+                <p>在「镜像管理」页面上传要安装的操作系统 ISO 文件</p>
+            </div>
+        </div>
+        <div class="guide-step">
+            <span class="step-num">2</span>
+            <div class="step-content">
+                <h3>等待自动提取</h3>
+                <p>系统会自动提取 ISO 中的 boot 文件到 TFTP 目录</p>
+            </div>
+        </div>
+        <div class="guide-step">
+            <span class="step-num">3</span>
+            <div class="step-content">
+                <h3>PXE 启动客户端</h3>
+                <p>在目标机器上按 <kbd>Esc</kbd> 选择 Network Boot (PXE)</p>
+            </div>
+        </div>
+        <div class="guide-step">
+            <span class="step-num">4</span>
+            <div class="step-content">
+                <h3>开始安装</h3>
+                <p>等待自动获取 IP 后，即可开始操作系统安装</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshStatus() {
+    fetch('/api/status')
+        .then(r => r.json())
+        .then(data => {
+            location.reload();
+        });
+}
+
+function viewLogs() {
+    fetch('/api/logs?lines=50')
+        .then(r => r.json())
+        .then(data => {
+            let content = '=== PXE Server 日志 ===\n\n';
+            data.forEach(log => {
+                content += `--- ${log.file} ---\n${log.content}\n`;
+            });
+            alert(content || '暂无日志');
+        });
+}
+
+function testPXE() {
+    alert('请在目标机器上按 Esc 选择 Network Boot (PXE) 进行测试');
+}
+
+// 格式化运行时间
+function formatUptime(seconds) {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    
+    if (days > 0) return `${days} 天 ${hours} 小时`;
+    if (hours > 0) return `${hours} 小时 ${mins} 分钟`;
+    return `${mins} 分钟`;
+}
+
+// 自动刷新状态
+setInterval(refreshStatus, 30000);
+</script>
+{% endblock %}
