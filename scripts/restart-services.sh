@@ -159,8 +159,9 @@ sleep 1
 sleep 2
 
 # DHCP
-/usr/sbin/touch /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
-/usr/sbin/chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+mkdir -p /var/lib/dhcp 2>/dev/null || true
+touch /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
 /usr/sbin/dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 || log_warn "DHCP 配置测试失败"
 /usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf 2>&1 | tee /tmp/dhcp-startup.log || log_warn "DHCP 启动完成(可能有警告)"
 

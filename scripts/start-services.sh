@@ -195,8 +195,9 @@ sleep 2
 
 # DHCP
 log_info "启动 DHCP Server..."
-/usr/sbin/touch /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
-/usr/sbin/chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+mkdir -p /var/lib/dhcp 2>/dev/null || true
+touch /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
 
 # 验证配置文件存在
 if [ ! -f /etc/dhcp/dhcpd.conf ]; then
