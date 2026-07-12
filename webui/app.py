@@ -444,25 +444,19 @@ def service_control(action):
     """API: 服务控制 (start/stop/restart)"""
     try:
         if action == 'start':
-            # 启动所有 PXE 服务
-            code, out, err = run_cmd('bash /app/scripts/start-services.sh', timeout=60)
-            if code == 0:
-                return jsonify({'success': True, 'message': '所有服务已启动'})
-            else:
-                return jsonify({'success': False, 'message': '启动服务时出错: ' + err})
+            # 后台启动所有 PXE 服务
+            run_cmd('nohup bash /app/scripts/start-services.sh > /tmp/service-start.log 2>&1 &', timeout=5)
+            return jsonify({'success': True, 'message': '服务启动命令已发送'})
         
         elif action == 'stop':
             # 停止所有 PXE 服务
-            code, out, err = run_cmd('killall dhcpd xinetd rpcbind nfsd mountd 2>/dev/null; echo ok', timeout=30)
+            run_cmd('killall dhcpd xinetd rpcbind nfsd mountd 2>/dev/null', timeout=10)
             return jsonify({'success': True, 'message': '所有服务已停止'})
         
         elif action == 'restart':
-            # 重启所有 PXE 服务
-            code, out, err = run_cmd('bash /app/scripts/restart-services.sh', timeout=90)
-            if code == 0:
-                return jsonify({'success': True, 'message': '所有服务已重启'})
-            else:
-                return jsonify({'success': False, 'message': '重启服务时出错: ' + err})
+            # 后台重启所有 PXE 服务
+            run_cmd('nohup bash /app/scripts/restart-services.sh > /tmp/service-restart.log 2>&1 &', timeout=5)
+            return jsonify({'success': True, 'message': '服务重启命令已发送'})
         
         else:
             return jsonify({'success': False, 'message': '未知操作: ' + action})
