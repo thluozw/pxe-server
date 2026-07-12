@@ -5,8 +5,7 @@
 #
 # 功能：
 #   - WebUI: 镜像上传、服务配置、状态监控
-#   - ISC DHCP Server: 提供 IP + PXE boot 选项
-#   - TFTP Server: 提供 boot 文件
+#   - dnsmasq: ProxyDHCP (RFC 4578, 端口 4011) 或 Standalone DHCP + TFTP
 #   - NFS Server: 提供 ISO 内容挂载
 #
 # 优势：
@@ -35,11 +34,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-flask \
     python3-werkzeug \
     \
-    # 网络服务
-    isc-dhcp-server \
-    tftpd-hpa \
+    # 网络服务：dnsmasq 一体化提供 ProxyDHCP/DHCP + TFTP
+    dnsmasq \
     nfs-kernel-server \
-    xinetd \
+    iproute2 \
     \
     # ISO 处理
     p7zip-full \
@@ -70,7 +68,6 @@ COPY --chown=root:root webui/static/ ${BASE_DIR}/webui/static/
 # ============================================================================
 # 复制配置文件
 # ============================================================================
-COPY --chown=root:root config/xinetd-tftp /etc/xinetd.d/tftp
 COPY --chown=root:root config/exports /etc/exports
 
 # ============================================================================
@@ -101,7 +98,7 @@ CMD /app/scripts/start-services.sh & \
     python3 /app/webui/app.py
 
 # 暴露端口
-EXPOSE 8080 67/udp 69/udp 2049/tcp 20048/tcp
+EXPOSE 8080 67/udp 69/udp 4011/udp 2049/tcp 20048/tcp
 
 # 卷
 VOLUME ["${BASE_DIR}/data"]

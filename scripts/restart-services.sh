@@ -70,67 +70,56 @@ log_info "DHCP 模式: $DHCP_MODE"
 # ============================================================================
 log_info "停止现有服务..."
 
-# 停止 DHCP
-/usr/sbin/pkill -HUP dhcpd 2>/dev/null || true
-/usr/sbin/pkill dhcpd 2>/dev/null || true
+# 停止 dnsmasq
+killall dnsmasq 2>/dev/null || true
 
 # 停止 NFS
 /usr/sbin/rpc.nfsd 0 2>/dev/null || true
 /usr/sbin/rpc.mountd --no-notify 2>/dev/null || true
 
-# 停止 xinetd (TFTP)
-/usr/sbin/pkill xinetd 2>/dev/null || true
-
 sleep 2
 
 # ============================================================================
-# 生成 DHCP 配置
+# 生成 dnsmasq 配置
 # ============================================================================
-log_info "生成 DHCP 配置..."
+log_info "生成 dnsmasq 配置..."
 
-DHCP_CONF="/etc/dhcp/dhcpd.conf"
+BASE_DIR=${BASE_DIR:-/app}
+DNSMASQ_CONF="/etc/dnsmasq.d/pxe.conf"
+mkdir -p /etc/dnsmasq.d
+
+cat > "$DNSMASQ_CONF" << EOF
+# dnsmasq PXE 配置 (自动生成)
+port=0
+no-resolv
+no-hosts
+log-dhcp
+enable-tftp
+tftp-root=${BASE_DIR}/data/boot
+tftp-no-blocksize
+EOF
 
 if [ "$DHCP_MODE" = "proxy" ]; then
-    # Proxy 模式：只响应 PXE 请求
-    cat > "$DHCP_CONF" << EOF
-# DHCP Proxy Configuration
-# 只处理 PXE 引导请求
-authoritative;
-ddns-update-style none;
-default-lease-time 600;
-max-lease-time 7200;
-log-facility local7;
-
-# Proxy 模式需要 subnet 声明才能启动
-subnet ${SUBNET_NETWORK} netmask ${SUBNET_MASK} {
-    # Proxy 模式：IP 由主 DHCP 分配，这里只提供 PXE 选项
-    option routers ${GATEWAY};
-    option subnet-mask ${SUBNET_MASK};
-}
+    cat >> "$DNSMASQ_CONF" << EOF
+# ProxyDHCP 模式 (RFC 4578)：不分配 IP，不占用 67
+dhcp-range=${SUBNET_NETWORK},proxy
+pxe-service=x86PC,"PXE Boot (BIOS)",pxelinux.0
+pxe-service=BC_EFI,"PXE Boot (UEFI x86)",bootx64.efi
+pxe-service=X86-64_EFI,"PXE Boot (UEFI x64)",bootx64.efi
+dhcp-boot=pxelinux.0,,${SERVER_IP}
 EOF
-    log_info "Proxy 模式：需要主 DHCP 服务器配合"
+    log_info "ProxyDHCP 模式：无需配置路由器 66/67"
 else
-    # Standalone 模式：完整的 DHCP 服务器
-    cat > "$DHCP_CONF" << EOF
-# DHCP Standalone Configuration
-# 提供完整的 DHCP 服务
-authoritative;
-ddns-update-style none;
-default-lease-time 600;
-max-lease-time 7200;
-log-facility local7;
-
-subnet ${SUBNET_NETWORK} netmask ${SUBNET_MASK} {
-    range ${DHCP_RANGE_START} ${DHCP_RANGE_END};
-    option routers ${GATEWAY};
-    option subnet-mask ${SUBNET_MASK};
-    option domain-name-servers ${GATEWAY};
-    option broadcast-address ${BROADCAST};
-    
-    # PXE Boot
-    filename "pxelinux.0";
-    next-server ${SERVER_IP};
-}
+    cat >> "$DNSMASQ_CONF" << EOF
+# Standalone 模式：分配 IP + PXE 引导
+dhcp-authoritative
+dhcp-range=${DHCP_RANGE_START},${DHCP_RANGE_END},${SUBNET_MASK},12h
+dhcp-option=option:router,${GATEWAY}
+dhcp-option=option:dns-server,${GATEWAY}
+dhcp-boot=pxelinux.0,,${SERVER_IP}
+pxe-service=x86PC,"PXE Boot (BIOS)",pxelinux.0
+pxe-service=BC_EFI,"PXE Boot (UEFI x86)",bootx64.efi
+pxe-service=X86-64_EFI,"PXE Boot (UEFI x64)",bootx64.efi
 EOF
     log_info "Standalone 模式：IP 范围 ${DHCP_RANGE_START} - ${DHCP_RANGE_END}"
 fi
@@ -153,17 +142,11 @@ sleep 1
 # rpc.mountd
 /usr/sbin/rpc.mountd || true
 
-# xinetd (TFTP)
-/usr/sbin/xinetd -dontfork 2>&1 || log_warn "TFTP 启动失败"
+sleep 1
 
-sleep 2
-
-# DHCP
-mkdir -p /var/lib/dhcp 2>/dev/null || true
-touch /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
-chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
-/usr/sbin/dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 || log_warn "DHCP 配置测试失败"
-/usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf 2>&1 | tee /tmp/dhcp-startup.log || log_warn "DHCP 启动完成(可能有警告)"
+# dnsmasq (ProxyDHCP/DHCP + TFTP)
+/usr/sbin/dnsmasq --test --conf-file="$DNSMASQ_CONF" 2>&1 || log_warn "dnsmasq 配置测试失败"
+/usr/sbin/dnsmasq --conf-file="$DNSMASQ_CONF" 2>&1 | tee /tmp/dnsmasq-startup.log || log_warn "dnsmasq 启动完成(可能有警告)"
 
 echo ""
 echo "=============================================="

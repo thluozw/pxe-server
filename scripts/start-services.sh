@@ -86,69 +86,75 @@ mkdir -p ${BASE_DIR}/data/temp
 mkdir -p ${BASE_DIR}/config
 
 # ============================================================================
-# 配置 DHCP
+# 配置 dnsmasq (ProxyDHCP / Standalone DHCP + TFTP)
 # ============================================================================
-log_info "配置 DHCP Server..."
+log_info "配置 dnsmasq..."
 
-DHCP_CONF="/etc/dhcp/dhcpd.conf"
+DNSMASQ_CONF="/etc/dnsmasq.d/pxe.conf"
+mkdir -p /etc/dnsmasq.d
+
+# 公共部分：关闭 DNS（port=0），只做 DHCP/TFTP；启用内置 TFTP
+cat > "$DNSMASQ_CONF" << EOF
+# ============================================================
+# dnsmasq PXE 配置 (自动生成，勿手动编辑)
+# ============================================================
+
+# 关闭 DNS 服务，只作为 DHCP/TFTP 服务器
+port=0
+
+# 不读取 /etc/resolv.conf 和 /etc/hosts
+no-resolv
+no-hosts
+
+# 日志
+log-dhcp
+
+# 内置 TFTP 服务
+enable-tftp
+tftp-root=${BASE_DIR}/data/boot
+tftp-no-blocksize
+
+EOF
 
 if [ "$DHCP_MODE" = "proxy" ]; then
-    # Proxy 模式：只处理 PXE 请求
-    cat > "$DHCP_CONF" << EOF
-# DHCP Proxy Configuration
-# ========================
-# 此模式只处理 PXE 引导请求
-# IP 地址由主 DHCP 服务器（如路由器）分配
-#
-# 使用说明：
-# 1. 确保路由器/主 DHCP 服务器正常运行
-# 2. 在路由器上配置 DHCP 选项指向本服务器
-# 3. 或者使用 Standalone 模式
+    # ------------------------------------------------------------------
+    # ProxyDHCP 模式 (RFC 4578) - 真正的 iVentoy 式 Proxy
+    #   - 监听 UDP 4011，不占用 67，不分配 IP
+    #   - 主 DHCP（路由器）给 IP，本服务器只补充 PXE 引导信息
+    #   - 无需在路由器配置 Option 66/67
+    # ------------------------------------------------------------------
+    cat >> "$DNSMASQ_CONF" << EOF
+# ProxyDHCP 模式：只提供 PXE 引导，不分配 IP
+dhcp-range=${SUBNET_NETWORK},proxy
 
-authoritative;
-ddns-update-style none;
-default-lease-time 600;
-max-lease-time 7200;
-log-facility local7;
+# PXE 引导服务（BIOS / Legacy x86）
+pxe-service=x86PC,"PXE Boot (BIOS)",pxelinux.0
+pxe-service=BC_EFI,"PXE Boot (UEFI x86)",bootx64.efi
+pxe-service=X86-64_EFI,"PXE Boot (UEFI x64)",bootx64.efi
 
-# Proxy 模式需要 subnet 声明才能启动
-# 但这里只转发 PXE 请求，不分配 IP
-subnet ${SUBNET_NETWORK} netmask ${SUBNET_MASK} {
-    # Proxy 模式：IP 由主 DHCP 分配，这里只提供 PXE 选项
-    # 不设置 range，客户端从主 DHCP 获取 IP
-    option routers ${GATEWAY};
-    option subnet-mask ${SUBNET_MASK};
-}
+# TFTP 服务器地址
+dhcp-boot=pxelinux.0,,${SERVER_IP}
 EOF
-    log_warn "Proxy 模式：需要主 DHCP 服务器配合"
-    log_info "  - 主 DHCP 服务器分配 IP 地址"
-    log_info "  - 本服务器提供 PXE 引导选项"
-    
+    log_success "ProxyDHCP 模式已配置 (RFC 4578, 端口 4011)"
+    log_info "  - 无需在路由器配置 Option 66/67"
+    log_info "  - 主 DHCP 服务器分配 IP，本服务器提供 PXE 引导"
+
 else
-    # Standalone 模式：完整的 DHCP 服务器
-    cat > "$DHCP_CONF" << EOF
-# DHCP Standalone Configuration
-# ==============================
-# 本服务器作为唯一的 DHCP 服务器
-# 分配 IP 地址并提供 PXE 引导
+    # ------------------------------------------------------------------
+    # Standalone 模式：本服务器作为唯一 DHCP，分配 IP + PXE 引导
+    # ------------------------------------------------------------------
+    cat >> "$DNSMASQ_CONF" << EOF
+# Standalone 模式：分配 IP + PXE 引导
+dhcp-authoritative
+dhcp-range=${DHCP_RANGE_START},${DHCP_RANGE_END},${SUBNET_MASK},12h
+dhcp-option=option:router,${GATEWAY}
+dhcp-option=option:dns-server,${GATEWAY}
 
-authoritative;
-ddns-update-style none;
-default-lease-time 600;
-max-lease-time 7200;
-log-facility local7;
-
-subnet ${SUBNET_NETWORK} netmask ${SUBNET_MASK} {
-    range ${DHCP_RANGE_START} ${DHCP_RANGE_END};
-    option routers ${GATEWAY};
-    option subnet-mask ${SUBNET_MASK};
-    option domain-name-servers ${GATEWAY};
-    option broadcast-address ${SUBNET_BROADCAST};
-    
-    # PXE Boot
-    filename "pxelinux.0";
-    next-server ${SERVER_IP};
-}
+# PXE 引导
+dhcp-boot=pxelinux.0,,${SERVER_IP}
+pxe-service=x86PC,"PXE Boot (BIOS)",pxelinux.0
+pxe-service=BC_EFI,"PXE Boot (UEFI x86)",bootx64.efi
+pxe-service=X86-64_EFI,"PXE Boot (UEFI x64)",bootx64.efi
 EOF
     log_success "Standalone 模式已配置"
     log_info "  - IP 范围: ${DHCP_RANGE_START} - ${DHCP_RANGE_END}"
@@ -186,29 +192,22 @@ log_info "启动 rpc.nfsd..."
 log_info "启动 rpc.mountd..."
 /usr/sbin/rpc.mountd || true
 
-# xinetd (TFTP)
-log_info "启动 TFTP (xinetd)..."
-/usr/sbin/xinetd -dontfork 2>&1 &
-sleep 1 || log_warn "TFTP xinetd 启动失败"
+sleep 1
 
-sleep 2
+# dnsmasq (ProxyDHCP/DHCP + TFTP)
+log_info "启动 dnsmasq (DHCP + TFTP)..."
 
-# DHCP
-log_info "启动 DHCP Server..."
-mkdir -p /var/lib/dhcp 2>/dev/null || true
-touch /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
-chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+# 清理可能残留的进程
+killall dnsmasq 2>/dev/null || true
+sleep 1
 
-# 验证配置文件存在
-if [ ! -f /etc/dhcp/dhcpd.conf ]; then
-    log_warn "DHCP 配置文件不存在"
-fi
+# 测试配置
+/usr/sbin/dnsmasq --test --conf-file="$DNSMASQ_CONF" 2>&1 || log_warn "dnsmasq 配置测试失败"
 
-# 测试 DHCP 配置
-/usr/sbin/dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 || log_warn "DHCP 配置测试失败"
+# 启动（直接指定我们的配置文件，避免依赖默认 conf-dir）
+/usr/sbin/dnsmasq --conf-file="$DNSMASQ_CONF" 2>&1 || log_warn "dnsmasq 启动失败，请检查日志"
 
-# 启动 DHCP（分离模式）
-/usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf 2>&1 || log_warn "DHCP 服务启动失败，请检查日志"
+sleep 1
 
 echo ""
 echo "=============================================="
@@ -218,16 +217,19 @@ echo ""
 log_info "服务状态:"
 echo ""
 echo "  WebUI:       http://${SERVER_IP}:${WEBUI_PORT}"
-echo "  DHCP:        UDP:67 (${DHCP_MODE})"
+if [ "$DHCP_MODE" = "proxy" ]; then
+    echo "  ProxyDHCP:   UDP:4011 (不占用 67)"
+else
+    echo "  DHCP:        UDP:67"
+fi
 echo "  TFTP:        UDP:69"
 echo "  NFS:         TCP:2049"
-echo "  Mountd:      TCP:20048"
 echo ""
 log_info "模式说明:"
 if [ "$DHCP_MODE" = "proxy" ]; then
-    echo "  🔄 Proxy 模式 - 主 DHCP 服务器分配 IP，本服务器提供 PXE"
+    echo "  ProxyDHCP 模式 - 主 DHCP 分配 IP，本服务器提供 PXE（无需配置路由器 66/67）"
 else
-    echo "  🖥️ Standalone 模式 - 本服务器同时分配 IP 和提供 PXE"
+    echo "  Standalone 模式 - 本服务器同时分配 IP 和提供 PXE"
 fi
 echo ""
 log_info "日志目录:"

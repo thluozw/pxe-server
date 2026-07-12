@@ -115,56 +115,6 @@ def restart_services():
         return True
     return False
 
-def generate_dhcp_config(mode='proxy', **kwargs):
-    """Generate DHCP config for the given mode."""
-    server_ip = kwargs.get('server_ip', SERVER_IP)
-    subnet_mask = kwargs.get('subnet_mask', '255.255.255.0')
-    subnet_network = kwargs.get('subnet_network', '192.168.8.0')
-    broadcast = kwargs.get('broadcast', '192.168.8.255')
-    dhcp_start = kwargs.get('dhcp_range_start', '192.168.8.100')
-    dhcp_end = kwargs.get('dhcp_range_end', '192.168.8.200')
-    gateway = kwargs.get('gateway', '192.168.8.1')
-
-    if mode == 'proxy':
-        # Proxy mode: main router provides IP, we only provide PXE options.
-        config = """# DHCP Proxy Configuration
-# Main DHCP provides IP; this server only serves PXE options.
-authoritative;
-ddns-update-style none;
-
-omapi_port 7911;
-
-log-facility local7;
-
-subnet %s netmask %s {
-    # Proxy mode: no address range, PXE options only.
-}
-""" % (subnet_network, subnet_mask)
-    else:
-        # Standalone mode: this server is the only DHCP server.
-        config = """# DHCP Standalone Configuration
-# This server provides IP and PXE boot.
-authoritative;
-ddns-update-style none;
-default-lease-time 600;
-max-lease-time 7200;
-log-facility local7;
-
-subnet %s netmask %s {
-    range %s %s;
-    option routers %s;
-    option subnet-mask %s;
-    option domain-name-servers %s;
-    option broadcast-address %s;
-
-    # PXE Boot
-    filename "pxelinux.0";
-    next-server %s;
-}
-""" % (subnet_network, subnet_mask, dhcp_start, dhcp_end, gateway,
-       subnet_mask, gateway, broadcast, server_ip)
-    return config
-
 def get_service_status():
     """Return service status by reading /proc/net directly (pure Python)."""
     def check_port_py(port, proto='udp'):
@@ -185,11 +135,16 @@ def get_service_status():
         except Exception:
             return False
 
+    # DHCP port depends on mode: proxy=4011 (ProxyDHCP), standalone=67.
+    cfg = load_config()
+    dhcp_mode = cfg.get('dhcp_mode', 'proxy')
+    dhcp_port = 4011 if dhcp_mode == 'proxy' else 67
+    dhcp_name = 'ProxyDHCP' if dhcp_mode == 'proxy' else 'DHCP Server'
+
     services = {
-        'dhcp': {'name': 'DHCP Server', 'port': 67, 'proto': 'udp'},
+        'dhcp': {'name': dhcp_name, 'port': dhcp_port, 'proto': 'udp'},
         'tftp': {'name': 'TFTP Server', 'port': 69, 'proto': 'udp'},
         'nfs': {'name': 'NFS Server', 'port': 2049, 'proto': 'tcp'},
-        'mountd': {'name': 'Mountd', 'port': 20048, 'proto': 'tcp'},
         'webui': {'name': 'WebUI', 'port': WEBUI_PORT, 'proto': 'tcp'},
     }
 
@@ -407,18 +362,13 @@ def save_mode_config():
 
     save_config(config)
 
-    # Generate DHCP config.
-    dhcp_conf = generate_dhcp_config(mode=config['dhcp_mode'], **config)
+    # Regenerate dnsmasq config and restart services in the background.
+    # restart-services.sh reads server.conf and rebuilds the dnsmasq config
+    # for the selected mode (proxy=ProxyDHCP on 4011, standalone=DHCP on 67).
+    restart_services()
 
-    with open('/etc/dhcp/dhcpd.conf', 'w') as f:
-        f.write(dhcp_conf)
-
-    # Validate and reload DHCP.
-    run_cmd('dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>/dev/null', timeout=10)
-    code, _, err = run_cmd('killall -HUP dhcpd 2>/dev/null; echo ok', timeout=10)
-
-    mode_name = 'Proxy' if config['dhcp_mode'] == 'proxy' else 'Standalone'
-    flash('Saved %s mode config' % mode_name, 'success')
+    mode_name = 'Proxy (ProxyDHCP)' if config['dhcp_mode'] == 'proxy' else 'Standalone'
+    flash('Saved %s mode config, services restarting...' % mode_name, 'success')
 
     return redirect(url_for('config_page'))
 
@@ -468,7 +418,7 @@ def service_control(action):
             return jsonify({'success': True, 'message': 'Services starting'})
 
         elif action == 'stop':
-            run_cmd('killall dhcpd xinetd rpcbind nfsd mountd 2>/dev/null', timeout=10)
+            run_cmd('killall dnsmasq rpcbind 2>/dev/null; rpc.nfsd 0 2>/dev/null; echo ok', timeout=10)
             return jsonify({'success': True, 'message': 'Services stopped'})
 
         elif action == 'restart':
