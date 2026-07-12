@@ -237,6 +237,10 @@ def extract_iso(filename):
                 run_cmd('cp "%s" "%s"' % (src, dest))
                 boot_files.append(f)
 
+    # Regenerate PXE boot menu (BIOS + UEFI) for all ISOs.
+    run_cmd('BASE_DIR="%s" SERVER_IP="%s" bash %s/scripts/gen-menu.sh 2>&1'
+            % (BASE_DIR, SERVER_IP, BASE_DIR), timeout=60)
+
     return boot_files
 
 # ============================================================================

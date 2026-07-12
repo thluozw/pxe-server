@@ -39,6 +39,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nfs-kernel-server \
     iproute2 \
     \
+    # PXE 引导器：BIOS (pxelinux/syslinux) + UEFI (grub-efi)
+    pxelinux \
+    syslinux-common \
+    grub-efi-amd64-bin \
+    grub-common \
+    \
     # ISO 处理
     p7zip-full \
     squashfs-tools \
@@ -81,6 +87,25 @@ RUN chmod +x ${BASE_DIR}/scripts/*.sh
 # ============================================================================
 RUN ln -sf ${BASE_DIR}/data/boot /tftpboot && \
     mkdir -p /var/tftpboot
+
+# ============================================================================
+# 预置 PXE 引导器静态文件到 /app/pxe-assets（不被 data 卷覆盖）
+# 启动时由 start-services.sh 复制到 TFTP 根目录
+# ============================================================================
+RUN mkdir -p ${BASE_DIR}/pxe-assets/pxelinux.cfg && \
+    # BIOS: pxelinux.0 + 必需的 c32 模块
+    cp /usr/lib/PXELINUX/pxelinux.0 ${BASE_DIR}/pxe-assets/ && \
+    cp /usr/lib/syslinux/modules/bios/ldlinux.c32 ${BASE_DIR}/pxe-assets/ && \
+    cp /usr/lib/syslinux/modules/bios/libcom32.c32 ${BASE_DIR}/pxe-assets/ && \
+    cp /usr/lib/syslinux/modules/bios/libutil.c32 ${BASE_DIR}/pxe-assets/ && \
+    cp /usr/lib/syslinux/modules/bios/vesamenu.c32 ${BASE_DIR}/pxe-assets/ && \
+    cp /usr/lib/syslinux/modules/bios/menu.c32 ${BASE_DIR}/pxe-assets/ && \
+    # UEFI: 用 grub-mkimage 生成 bootx64.efi（含 netboot 模块）
+    grub-mkimage -O x86_64-efi -o ${BASE_DIR}/pxe-assets/bootx64.efi -p /grub \
+        tftp efinet net normal linux configfile echo ls cat boot \
+        part_gpt part_msdos fat ext2 iso9660 search search_label search_fs_uuid \
+        gfxterm all_video test true loadenv reboot halt 2>/dev/null && \
+    echo "PXE assets prepared"
 
 # ============================================================================
 # 健康检查

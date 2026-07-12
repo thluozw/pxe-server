@@ -86,6 +86,14 @@ mkdir -p ${BASE_DIR}/data/temp
 mkdir -p ${BASE_DIR}/config
 
 # ============================================================================
+# 布置 PXE 引导器 + 生成引导菜单
+# ============================================================================
+log_info "布置 PXE 引导器并生成菜单..."
+if [ -f "${BASE_DIR}/scripts/gen-menu.sh" ]; then
+    BASE_DIR="${BASE_DIR}" SERVER_IP="${SERVER_IP}" bash "${BASE_DIR}/scripts/gen-menu.sh" || log_warn "菜单生成出错"
+fi
+
+# ============================================================================
 # 配置 dnsmasq (ProxyDHCP / Standalone DHCP + TFTP)
 # ============================================================================
 log_info "配置 dnsmasq..."
