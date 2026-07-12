@@ -98,7 +98,7 @@ WORKDIR ${BASE_DIR}
 
 # 启动顺序：先启动 WebUI，后台启动网络服务
 CMD python3 webui/app.py & \
-    /scripts/start-services.sh & \
+    scripts/start-services.sh & \
     tail -f /dev/null
 
 # 暴露端口
