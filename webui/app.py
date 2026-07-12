@@ -439,6 +439,37 @@ def api_logs():
     
     return jsonify(logs)
 
+@app.route('/api/service/<action>', methods=['POST'])
+def service_control(action):
+    """API: 服务控制 (start/stop/restart)"""
+    try:
+        if action == 'start':
+            # 启动所有 PXE 服务
+            code, out, err = run_cmd('bash /scripts/start-services.sh', timeout=60)
+            if code == 0:
+                return jsonify({'success': True, 'message': '所有服务已启动'})
+            else:
+                return jsonify({'success': False, 'message': '启动服务时出错: ' + err})
+        
+        elif action == 'stop':
+            # 停止所有 PXE 服务
+            code, out, err = run_cmd('killall dhcpd xinetd rpcbind nfsd mountd 2>/dev/null; echo ok', timeout=30)
+            return jsonify({'success': True, 'message': '所有服务已停止'})
+        
+        elif action == 'restart':
+            # 重启所有 PXE 服务
+            code, out, err = run_cmd('bash /scripts/restart-services.sh', timeout=90)
+            if code == 0:
+                return jsonify({'success': True, 'message': '所有服务已重启'})
+            else:
+                return jsonify({'success': False, 'message': '重启服务时出错: ' + err})
+        
+        else:
+            return jsonify({'success': False, 'message': '未知操作: ' + action})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': '操作失败: ' + str(e)})
+
 # ============================================================================
 # 启动
 # ============================================================================

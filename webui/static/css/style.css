@@ -100,6 +100,108 @@ body {
     color: white !important;
 }
 
+/* 当前模式标签（首页用 - 深色背景上用白色） */
+.mode-current-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    background: rgba(255,255,255,0.25) !important;
+    color: white !important;
+    margin-left: 8px;
+}
+
+.mode-current-badge.mode-proxy {
+    background: #22c55e !important;
+    color: white !important;
+}
+
+.mode-current-badge.mode-standalone {
+    background: #f59e0b !important;
+    color: white !important;
+}
+
+/* 服务控制按钮 */
+.service-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.service-control-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.service-control-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-start {
+    background: #22c55e;
+    color: white;
+}
+
+.btn-start:hover:not(:disabled) {
+    background: #16a34a;
+}
+
+.btn-stop {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-stop:hover:not(:disabled) {
+    background: #dc2626;
+}
+
+.btn-restart {
+    background: #2563eb;
+    color: white;
+}
+
+.btn-restart:hover:not(:disabled) {
+    background: #1d4ed8;
+}
+
+/* 服务控制反馈 */
+.service-action-feedback {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+}
+
+.service-action-feedback.success {
+    display: block;
+    background: #dcfce7;
+    color: #166534;
+}
+
+.service-action-feedback.error {
+    display: block;
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.service-action-feedback.loading {
+    display: block;
+    background: #dbeafe;
+    color: #1e40af;
+}
+
 /* ============================================================================
    Mode Selector (配置页)
    ============================================================================ */

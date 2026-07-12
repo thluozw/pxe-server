@@ -16,7 +16,7 @@
         </div>
         <div class="mode-text">
             <h2>当前模式: 
-                <span class="mode-label mode-{{ config.dhcp_mode }}">
+                <span class="mode-current-badge mode-{{ config.dhcp_mode }}">
                     {% if config.dhcp_mode == 'proxy' %}DHCP Proxy (代理模式){% else %}Standalone (独立模式){% endif %}
                 </span>
             </h2>
@@ -60,9 +60,30 @@
 <!-- 服务状态 -->
 <div class="card">
     <h2>🔧 服务状态</h2>
-    <div class="services-grid">
+    
+    <!-- 服务控制按钮 -->
+    <div class="service-controls">
+        <button class="service-control-btn btn-start" onclick="controlService('start')" id="btn-start">
+            ▶️ 启动全部
+        </button>
+        <button class="service-control-btn btn-stop" onclick="controlService('stop')" id="btn-stop">
+            ⏹️ 停止全部
+        </button>
+        <button class="service-control-btn btn-restart" onclick="controlService('restart')" id="btn-restart">
+            🔄 重启全部
+        </button>
+        <button class="btn btn-refresh" onclick="refreshStatus()">
+            🔄 刷新状态
+        </button>
+    </div>
+    
+    <!-- 操作反馈 -->
+    <div class="service-action-feedback" id="service-feedback"></div>
+    
+    <!-- 服务列表 -->
+    <div class="services-grid" id="services-grid">
         {% for key, svc in status.items() %}
-        <div class="service-item service-{{ svc.status }}">
+        <div class="service-item service-{{ svc.status }}" id="service-{{ key }}">
             <div class="service-icon">
                 {% if svc.status == 'running' %}✅{% else %}❌{% endif %}
             </div>
@@ -80,9 +101,6 @@
         </div>
         {% endfor %}
     </div>
-    <button class="btn btn-refresh" onclick="refreshStatus()">
-        🔄 刷新状态
-    </button>
 </div>
 
 <!-- 快速操作 -->
@@ -182,8 +200,82 @@
 
 {% block scripts %}
 <script>
+// 刷新状态
 function refreshStatus() {
-    location.reload();
+    fetch('/api/status')
+        .then(r => r.json())
+        .then(data => {
+            updateServicesDisplay(data);
+            showFeedback('状态已刷新', 'success');
+        })
+        .catch(err => {
+            showFeedback('刷新失败: ' + err, 'error');
+        });
+}
+
+// 更新服务显示
+function updateServicesDisplay(status) {
+    for (const [key, svc] of Object.entries(status)) {
+        const el = document.getElementById('service-' + key);
+        if (el) {
+            // 更新图标
+            el.querySelector('.service-icon').textContent = svc.status === 'running' ? '✅' : '❌';
+            // 更新样式
+            el.className = 'service-item service-' + svc.status;
+            // 更新状态标签
+            el.querySelector('.badge').className = 'badge badge-' + svc.status;
+            el.querySelector('.badge').textContent = svc.status;
+        }
+    }
+}
+
+// 显示反馈信息
+function showFeedback(message, type) {
+    const el = document.getElementById('service-feedback');
+    el.textContent = message;
+    el.className = 'service-action-feedback ' + type;
+    
+    // 3秒后自动隐藏
+    setTimeout(() => {
+        el.className = 'service-action-feedback';
+    }, 3000);
+}
+
+// 控制服务
+function controlService(action) {
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const btnRestart = document.getElementById('btn-restart');
+    
+    // 禁用所有按钮
+    btnStart.disabled = true;
+    btnStop.disabled = true;
+    btnRestart.disabled = true;
+    
+    showFeedback('正在执行 ' + (action === 'start' ? '启动' : action === 'stop' ? '停止' : '重启') + '...', 'loading');
+    
+    fetch('/api/service/' + action, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showFeedback('✅ ' + data.message, 'success');
+                // 2秒后刷新状态
+                setTimeout(() => {
+                    refreshStatus();
+                }, 2000);
+            } else {
+                showFeedback('❌ ' + data.message, 'error');
+            }
+        })
+        .catch(err => {
+            showFeedback('❌ 操作失败: ' + err, 'error');
+        })
+        .finally(() => {
+            // 恢复按钮
+            btnStart.disabled = false;
+            btnStop.disabled = false;
+            btnRestart.disabled = false;
+        });
 }
 
 function viewLogs() {
@@ -213,7 +305,7 @@ function formatUptime(seconds) {
     return `${mins} 分钟`;
 }
 
-// 自动刷新状态
+// 自动刷新状态 (每30秒)
 setInterval(refreshStatus, 30000);
 </script>
 {% endblock %}

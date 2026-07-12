@@ -245,6 +245,11 @@ document.querySelectorAll('input[name="dhcp_mode"]').forEach(radio => {
 });
 
 function saveMode() {
+    const btn = document.querySelector('button[onclick="saveMode()"]');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ 保存中...';
+    
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/api/config/mode';
@@ -286,6 +291,12 @@ function saveMode() {
     
     document.body.appendChild(form);
     form.submit();
+    
+    // 恢复按钮（表单提交后会跳转）
+    setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }, 5000);
 }
 
 function openRouterConfig() {
