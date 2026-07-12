@@ -19,7 +19,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # GitHub Container Registry (总是推送)
+      # GitHub Container Registry
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -27,30 +27,51 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # DockerHub (仅当 secrets 配置时)
+      # DockerHub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-        continue-on-error: true
 
-      - name: Extract metadata
-        id: meta
+      - name: Extract metadata (GHCR)
+        id: meta-ghcr
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest
             type=raw,value=${{ github.sha }}
 
-      - name: Build and Push
+      - name: Extract metadata (DockerHub)
+        id: meta-dockerhub
+        if: secrets.DOCKERHUB_USERNAME != ''
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ github.sha }}
+
+      # Build and Push to GHCR
+      - name: Build and Push to GHCR
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta-ghcr.outputs.tags }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build and Push to DockerHub
+      - name: Build and Push to DockerHub
+        if: secrets.DOCKERHUB_USERNAME != ''
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta-dockerhub.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -65,7 +86,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### DockerHub:" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
-            echo "- ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server (configured)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- Not configured. Add DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets to enable." >> $GITHUB_STEP_SUMMARY
+            echo "- ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server:latest" >> $GITHUB_STEP_SUMMARY
+            echo "- ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           fi
