@@ -120,7 +120,8 @@ log-dhcp
 # 内置 TFTP 服务
 enable-tftp
 tftp-root=${BASE_DIR}/data/boot
-tftp-no-blocksize
+# 允许 blksize 协商（RFC 2348）以加速大文件（initrd）传输
+# 不要用 tftp-no-blocksize（会强制 512 字节块，传 initrd 极慢）
 
 EOF
 

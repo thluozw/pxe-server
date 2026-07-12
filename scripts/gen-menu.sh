@@ -77,7 +77,8 @@ for dir in "$BOOT_DIR"/*/; do
 LABEL $iso_name
     MENU LABEL $iso_name (NFS)
     KERNEL $kernel_rel
-    APPEND initrd=$initrd_rel $append
+    APPEND $append
+    INITRD $initrd_rel
 
 EOF
 
