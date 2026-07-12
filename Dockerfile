@@ -39,11 +39,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nfs-kernel-server \
     iproute2 \
     \
-    # PXE 引导器：BIOS (pxelinux/syslinux) + UEFI (grub-efi)
+    # PXE 引导器：BIOS (pxelinux) + UEFI (syslinux-efi64)
+    # 注：不用 grub-efi-amd64-bin（它是 amd64 专属包，arm64 源无安装候选）
     pxelinux \
     syslinux-common \
-    grub-efi-amd64-bin \
-    grub-common \
+    syslinux-efi \
     \
     # ISO 处理
     p7zip-full \
@@ -100,11 +100,14 @@ RUN mkdir -p ${BASE_DIR}/pxe-assets/pxelinux.cfg && \
     cp /usr/lib/syslinux/modules/bios/libutil.c32 ${BASE_DIR}/pxe-assets/ && \
     cp /usr/lib/syslinux/modules/bios/vesamenu.c32 ${BASE_DIR}/pxe-assets/ && \
     cp /usr/lib/syslinux/modules/bios/menu.c32 ${BASE_DIR}/pxe-assets/ && \
-    # UEFI: 用 grub-mkimage 生成 bootx64.efi（含 netboot 模块）
-    grub-mkimage -O x86_64-efi -o ${BASE_DIR}/pxe-assets/bootx64.efi -p /grub \
-        tftp efinet net normal linux configfile echo ls cat boot \
-        part_gpt part_msdos fat ext2 iso9660 search search_label search_fs_uuid \
-        gfxterm all_video test true loadenv reboot halt 2>/dev/null && \
+    # UEFI x64: syslinux.efi + efi64 模块
+    mkdir -p ${BASE_DIR}/pxe-assets/efi64 && \
+    cp /usr/lib/SYSLINUX.EFI/efi64/syslinux.efi ${BASE_DIR}/pxe-assets/efi64/bootx64.efi && \
+    cp /usr/lib/syslinux/modules/efi64/ldlinux.e64 ${BASE_DIR}/pxe-assets/efi64/ && \
+    cp /usr/lib/syslinux/modules/efi64/libcom32.c32 ${BASE_DIR}/pxe-assets/efi64/ && \
+    cp /usr/lib/syslinux/modules/efi64/libutil.c32 ${BASE_DIR}/pxe-assets/efi64/ && \
+    cp /usr/lib/syslinux/modules/efi64/vesamenu.c32 ${BASE_DIR}/pxe-assets/efi64/ && \
+    cp /usr/lib/syslinux/modules/efi64/menu.c32 ${BASE_DIR}/pxe-assets/efi64/ && \
     echo "PXE assets prepared"
 
 # ============================================================================

@@ -137,8 +137,8 @@ dhcp-range=${SUBNET_NETWORK},proxy
 
 # PXE 引导服务（BIOS / Legacy x86）
 pxe-service=x86PC,"PXE Boot (BIOS)",pxelinux.0
-pxe-service=BC_EFI,"PXE Boot (UEFI x86)",bootx64.efi
-pxe-service=X86-64_EFI,"PXE Boot (UEFI x64)",bootx64.efi
+pxe-service=BC_EFI,"PXE Boot (UEFI x86)",efi64/bootx64.efi
+pxe-service=X86-64_EFI,"PXE Boot (UEFI x64)",efi64/bootx64.efi
 
 # TFTP 服务器地址
 dhcp-boot=pxelinux.0,,${SERVER_IP}
@@ -161,8 +161,8 @@ dhcp-option=option:dns-server,${GATEWAY}
 # PXE 引导
 dhcp-boot=pxelinux.0,,${SERVER_IP}
 pxe-service=x86PC,"PXE Boot (BIOS)",pxelinux.0
-pxe-service=BC_EFI,"PXE Boot (UEFI x86)",bootx64.efi
-pxe-service=X86-64_EFI,"PXE Boot (UEFI x64)",bootx64.efi
+pxe-service=BC_EFI,"PXE Boot (UEFI x86)",efi64/bootx64.efi
+pxe-service=X86-64_EFI,"PXE Boot (UEFI x64)",efi64/bootx64.efi
 EOF
     log_success "Standalone 模式已配置"
     log_info "  - IP 范围: ${DHCP_RANGE_START} - ${DHCP_RANGE_END}"
