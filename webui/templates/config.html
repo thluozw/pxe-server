@@ -8,59 +8,119 @@
     <p class="subtitle">配置 DHCP、TFTP、NFS 等服务参数</p>
 </div>
 
-<!-- 网络配置 -->
+<!-- DHCP 模式选择 -->
 <div class="card">
-    <h2>🌐 网络配置</h2>
-    <form method="post" action="/save-config">
-        <div class="form-grid">
-            <div class="form-group">
-                <label for="server_ip">服务器 IP 地址</label>
-                <input type="text" id="server_ip" name="server_ip" 
-                       value="{{ config.server_ip }}" 
-                       pattern="^(\d{1,3}\.){3}\d{1,3}$"
-                       placeholder="192.168.8.4" required>
-                <span class="hint">PXE 服务器的 IP 地址</span>
+    <h2>🔀 DHCP 工作模式</h2>
+    <p class="hint">选择 PXE 服务器如何与现有 DHCP 服务器配合工作</p>
+    
+    <div class="mode-selector">
+        <label class="mode-option mode-{% if config.dhcp_mode == 'proxy' %}active{% endif %}">
+            <input type="radio" name="dhcp_mode" value="proxy" {% if config.dhcp_mode == 'proxy' %}checked{% endif %}>
+            <div class="mode-card">
+                <span class="mode-icon">🔄</span>
+                <div class="mode-info">
+                    <span class="mode-name">DHCP Proxy (代理模式)</span>
+                    <span class="mode-desc">只提供 PXE 引导选项，IP 由主 DHCP 分配</span>
+                </div>
+                <span class="mode-badge">推荐</span>
+            </div>
+        </label>
+        
+        <label class="mode-option mode-{% if config.dhcp_mode == 'standalone' %}active{% endif %}">
+            <input type="radio" name="dhcp_mode" value="standalone" {% if config.dhcp_mode == 'standalone' %}checked{% endif %}>
+            <div class="mode-card">
+                <span class="mode-icon">🖥️</span>
+                <div class="mode-info">
+                    <span class="mode-name">Standalone (独立模式)</span>
+                    <span class="mode-desc">自己作为 DHCP 服务器，分配 IP + 提供 PXE 引导</span>
+                </div>
+            </div>
+        </label>
+    </div>
+    
+    <div class="mode-details">
+        <div id="proxy-info" class="mode-detail-content" style="display: {% if config.dhcp_mode == 'proxy' %}block{% else %}none{% endif %}">
+            <div class="alert alert-info">
+                <strong>💡 DHCP Proxy 模式说明</strong>
+                <ul>
+                    <li>主 DHCP 服务器（如路由器）正常分配 IP 地址</li>
+                    <li>PXE 服务器只添加 PXE 引导选项（Option 66/67）</li>
+                    <li>客户端从路由器获取 IP，同时从 PXE 服务器引导</li>
+                    <li><strong>需要配置路由器的 DHCP 选项指向本服务器</strong></li>
+                </ul>
             </div>
             
             <div class="form-group">
-                <label for="subnet_mask">子网掩码</label>
-                <input type="text" id="subnet_mask" name="subnet_mask" 
-                       value="{{ config.subnet_mask }}"
-                       pattern="^(\d{1,3}\.){3}\d{1,3}$"
-                       placeholder="255.255.255.0" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="dhcp_range_start">DHCP 起始 IP</label>
-                <input type="text" id="dhcp_range_start" name="dhcp_range_start" 
-                       value="{{ config.dhcp_range_start }}"
-                       pattern="^(\d{1,3}\.){3}\d{1,3}$"
-                       placeholder="192.168.8.100" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="dhcp_range_end">DHCP 结束 IP</label>
-                <input type="text" id="dhcp_range_end" name="dhcp_range_end" 
-                       value="{{ config.dhcp_range_end }}"
-                       pattern="^(\d{1,3}\.){3}\d{1,3}$"
-                       placeholder="192.168.8.200" required>
+                <label>主 DHCP 服务器 IP</label>
+                <input type="text" name="main_dhcp_ip" value="{{ config.main_dhcp_ip or '192.168.8.1' }}" 
+                       placeholder="如: 192.168.8.1 (路由器 IP)">
+                <span class="hint">填写路由器或上级 DHCP 服务器的 IP 地址</span>
             </div>
         </div>
         
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">
-                💾 保存配置
-            </button>
-            <button type="button" class="btn btn-secondary" onclick="resetConfig()">
-                🔄 重置
-            </button>
+        <div id="standalone-info" class="mode-detail-content" style="display: {% if config.dhcp_mode == 'standalone' %}block{% else %}none{% endif %}">
+            <div class="alert alert-warning">
+                <strong>⚠️ Standalone 模式说明</strong>
+                <ul>
+                    <li>PXE 服务器将作为唯一的 DHCP 服务器</li>
+                    <li>需要 <strong>关闭路由器的 DHCP 服务器</strong></li>
+                    <li>所有客户端将从本服务器获取 IP</li>
+                    <li>适合没有其他 DHCP 服务器的环境</li>
+                </ul>
+            </div>
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>DHCP 起始 IP</label>
+                    <input type="text" name="dhcp_range_start" value="{{ config.dhcp_range_start or '192.168.8.100' }}">
+                </div>
+                <div class="form-group">
+                    <label>DHCP 结束 IP</label>
+                    <input type="text" name="dhcp_range_end" value="{{ config.dhcp_range_end or '192.168.8.200' }}">
+                </div>
+                <div class="form-group">
+                    <label>子网掩码</label>
+                    <input type="text" name="subnet_mask" value="{{ config.subnet_mask or '255.255.255.0' }}">
+                </div>
+                <div class="form-group">
+                    <label>网关</label>
+                    <input type="text" name="gateway" value="{{ config.gateway or '192.168.8.1' }}">
+                </div>
+            </div>
         </div>
-    </form>
+    </div>
+    
+    <div class="form-actions">
+        <button type="button" class="btn btn-primary" onclick="saveMode()">
+            💾 保存模式设置
+        </button>
+        
+        {% if config.dhcp_mode == 'standalone' %}
+        <button type="button" class="btn btn-danger" onclick="openRouterConfig()">
+            🔌 关闭路由器 DHCP
+        </button>
+        {% endif %}
+    </div>
 </div>
 
-<!-- 服务配置 -->
+<!-- 网络配置 (仅 Standalone 模式需要) -->
+<div class="card" id="network-config-card">
+    <h2>🌐 网络配置</h2>
+    
+    <div class="form-grid">
+        <div class="form-group">
+            <label for="server_ip">服务器 IP 地址</label>
+            <input type="text" id="server_ip" name="server_ip" 
+                   value="{{ config.server_ip }}" 
+                   placeholder="192.168.8.4" required>
+            <span class="hint">PXE 服务器的 IP 地址</span>
+        </div>
+    </div>
+</div>
+
+<!-- 服务状态 -->
 <div class="card">
-    <h2>🔧 服务端口</h2>
+    <h2>🔧 服务状态</h2>
     <table class="table">
         <thead>
             <tr>
@@ -95,83 +155,70 @@
                 <td>TCP</td>
                 <td>网络文件系统</td>
             </tr>
-            <tr>
-                <td><span class="service-icon">🔗</span> Mountd</td>
-                <td><code>20048</code></td>
-                <td>TCP</td>
-                <td>NFS 挂载服务</td>
-            </tr>
         </tbody>
     </table>
+</div>
+
+<!-- 路由器配置指南 -->
+<div class="card">
+    <h2>📡 路由器配置 (DHCP Proxy 模式)</h2>
+    <p>如果使用 DHCP Proxy 模式，需要在路由器上配置 DHCP 选项：</p>
     
-    <div class="alert alert-warning">
-        <strong>⚠️ 防火墙设置</strong>
-        <p>请确保以下端口在防火墙中开放，否则客户端无法正常 PXE 启动：</p>
-        <code>iptables -A INPUT -p udp --dport 67 -j ACCEPT</code><br>
-        <code>iptables -A INPUT -p udp --dport 69 -j ACCEPT</code><br>
-        <code>iptables -A INPUT -p tcp --dport 2049 -j ACCEPT</code><br>
-        <code>iptables -A INPUT -p tcp --dport 20048 -j ACCEPT</code>
+    <pre class="code-block"># OpenWrt 路由器配置示例
+# 登录路由器后台，进入 网络 -> DHCP/DNS -> 高级设置
+
+# 添加 DHCP 选项:
+# Option 66: TFTP 服务器地址
+option 66 '192.168.8.4'
+
+# Option 67: 启动文件名
+# BIOS: ipxe.pxe 或 undionly.kpxe
+# UEFI: ipxe.efi 或 snp.efi
+option 67 'ipxe.pxe'
+
+# 或者在 /etc/config/dhcp 中添加:
+config dnsmasq
+    option 'dhcp_option' '66,192.168.8.4'
+    option 'dhcp_option' '67,ipxe.pxe'</pre>
+    
+    <div class="alert alert-info">
+        <strong>💡 提示</strong>
+        <p>iVentoy 在 Proxy 模式下会嗅探 DHCP 流量并注入 PXE 选项，客户端无需特殊配置即可自动从本服务器引导。</p>
     </div>
 </div>
 
-<!-- DHCP 配置预览 -->
+<!-- 模式切换说明 -->
 <div class="card">
-    <h2>📝 DHCP 配置预览</h2>
-    <pre class="code-block"># DHCP Server Configuration
-# Server IP: {{ config.server_ip }}
-# Subnet: {{ config.subnet_mask }}
-
-authoritative;
-ddns-update-style none;
-
-subnet {{ config.server_ip.rsplit('.', 1)[0] }}.0 netmask {{ config.subnet_mask }} {
-    range {{ config.dhcp_range_start }} {{ config.dhcp_range_end }};
-    option routers {{ config.server_ip }};
-    option subnet-mask {{ config.subnet_mask }};
-    option domain-name-servers {{ config.server_ip }};
+    <h2>❓ 应该选择哪个模式？</h2>
     
-    # PXE Boot Options
-    filename "pxelinux.0";
-    next-server {{ config.server_ip }};
-}</pre>
-</div>
-
-<!-- NFS 配置预览 -->
-<div class="card">
-    <h2>📂 NFS 导出配置</h2>
-    <pre class="code-block"># /etc/exports
-# NFS Share for PXE Clients
-
-/nfsroot    *(ro,sync,no_subtree_check,no_root_squash,async,insecure)</pre>
-    <p class="hint">客户端将通过 NFS 挂载 ISO 内容，避免下载到内存</p>
-</div>
-
-<!-- 目录信息 -->
-<div class="card">
-    <h2>📁 数据目录</h2>
     <table class="table">
         <thead>
             <tr>
-                <th>目录</th>
-                <th>用途</th>
+                <th>场景</th>
+                <th>推荐模式</th>
+                <th>说明</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td><code>/app/data/iso</code></td>
-                <td>存放上传的 ISO 文件</td>
+                <td>家庭/办公室网络</td>
+                <td><span class="badge badge-info">DHCP Proxy</span></td>
+                <td>不中断现有设备的网络连接</td>
             </tr>
             <tr>
-                <td><code>/app/data/boot</code></td>
-                <td>提取的 PXE boot 文件</td>
+                <td>专用 PXE 网络</td>
+                <td><span class="badge badge-warning">Standalone</span></td>
+                <td>只有 PXE 客户端的网络</td>
             </tr>
             <tr>
-                <td><code>/app/data/nfs</code></td>
-                <td>NFS 共享目录，存放 ISO 内容</td>
+                <td>无法修改路由器</td>
+                <td><span class="badge badge-warning">Standalone</span></td>
+                <td>无法配置路由器 DHCP 选项</td>
             </tr>
             <tr>
-                <td><code>/app/data/temp</code></td>
-                <td>临时文件目录</td>
+                <td>临时测试环境</td>
+                <td><span class="badge badge-info">DHCP Proxy</span></td>
+                <td>快速测试，无需改网络配置</td>
             </tr>
         </tbody>
     </table>
@@ -180,11 +227,72 @@ subnet {{ config.server_ip.rsplit('.', 1)[0] }}.0 netmask {{ config.subnet_mask 
 
 {% block scripts %}
 <script>
-function resetConfig() {
-    document.getElementById('server_ip').value = '192.168.8.4';
-    document.getElementById('subnet_mask').value = '255.255.255.0';
-    document.getElementById('dhcp_range_start').value = '192.168.8.100';
-    document.getElementById('dhcp_range_end').value = '192.168.8.200';
+// 模式切换
+document.querySelectorAll('input[name="dhcp_mode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const proxyInfo = document.getElementById('proxy-info');
+        const standaloneInfo = document.getElementById('standalone-info');
+        const networkCard = document.getElementById('network-config-card');
+        
+        if (this.value === 'proxy') {
+            proxyInfo.style.display = 'block';
+            standaloneInfo.style.display = 'none';
+        } else {
+            proxyInfo.style.display = 'none';
+            standaloneInfo.style.display = 'block';
+        }
+    });
+});
+
+function saveMode() {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/config/mode';
+    
+    const mode = document.querySelector('input[name="dhcp_mode"]:checked').value;
+    
+    const hiddenMode = document.createElement('input');
+    hiddenMode.type = 'hidden';
+    hiddenMode.name = 'mode';
+    hiddenMode.value = mode;
+    form.appendChild(hiddenMode);
+    
+    if (mode === 'proxy') {
+        const mainDhcp = document.querySelector('input[name="main_dhcp_ip"]').value;
+        const hiddenMain = document.createElement('input');
+        hiddenMain.type = 'hidden';
+        hiddenMain.name = 'main_dhcp_ip';
+        hiddenMain.value = mainDhcp;
+        form.appendChild(hiddenMain);
+    } else {
+        ['dhcp_range_start', 'dhcp_range_end', 'subnet_mask', 'gateway'].forEach(name => {
+            const input = document.querySelector(`input[name="${name}"]`);
+            if (input) {
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = name;
+                hidden.value = input.value;
+                form.appendChild(hidden);
+            }
+        });
+    }
+    
+    const serverIp = document.querySelector('input[name="server_ip"]').value;
+    const hiddenIp = document.createElement('input');
+    hiddenIp.type = 'hidden';
+    hiddenIp.name = 'server_ip';
+    hiddenIp.value = serverIp;
+    form.appendChild(hiddenIp);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function openRouterConfig() {
+    const routerIp = prompt('请输入路由器 IP 地址:', '192.168.8.1');
+    if (routerIp) {
+        window.open(`http://${routerIp}`, '_blank');
+    }
 }
 </script>
 {% endblock %}

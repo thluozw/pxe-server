@@ -8,6 +8,32 @@
     <p class="subtitle">实时监控 PXE 服务器运行状态</p>
 </div>
 
+<!-- 模式切换卡片 -->
+<div class="card mode-card">
+    <div class="mode-info-display">
+        <div class="mode-icon-large">
+            {% if config.dhcp_mode == 'proxy' %}🔄{% else %}🖥️{% endif %}
+        </div>
+        <div class="mode-text">
+            <h2>当前模式: 
+                <span class="mode-label mode-{{ config.dhcp_mode }}">
+                    {% if config.dhcp_mode == 'proxy' %}DHCP Proxy (代理模式){% else %}Standalone (独立模式){% endif %}
+                </span>
+            </h2>
+            <p class="mode-desc">
+                {% if config.dhcp_mode == 'proxy' %}
+                    主 DHCP 服务器分配 IP，本服务器提供 PXE 引导选项
+                {% else %}
+                    本服务器作为唯一的 DHCP 服务器
+                {% endif %}
+            </p>
+        </div>
+        <a href="/config" class="btn btn-primary">
+            ⚙️ 切换模式
+        </a>
+    </div>
+</div>
+
 <!-- 系统信息 -->
 <div class="card">
     <h2>🖥️ 系统信息</h2>
@@ -43,7 +69,7 @@
             <div class="service-info">
                 <div class="service-name">{{ svc.name }}</div>
                 <div class="service-detail">
-                    {{ svc.proto|upper }}:{{ svc.port }}
+                    {{ svc.proto }}:{{ svc.port }}
                 </div>
             </div>
             <div class="service-status">
@@ -157,11 +183,7 @@
 {% block scripts %}
 <script>
 function refreshStatus() {
-    fetch('/api/status')
-        .then(r => r.json())
-        .then(data => {
-            location.reload();
-        });
+    location.reload();
 }
 
 function viewLogs() {

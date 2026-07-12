@@ -37,6 +37,155 @@ body {
 }
 
 /* ============================================================================
+   Mode Card (首页模式显示)
+   ============================================================================ */
+
+.mode-card {
+    background: linear-gradient(135deg, #1e3a5f, #2563eb);
+    color: white;
+    padding: 24px;
+}
+
+.mode-card h2 {
+    color: white;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+.mode-info-display {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.mode-icon-large {
+    font-size: 48px;
+}
+
+.mode-text {
+    flex: 1;
+}
+
+.mode-text .mode-label {
+    font-size: 14px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.2);
+    margin-left: 8px;
+}
+
+.mode-desc {
+    color: rgba(255,255,255,0.8);
+    margin-top: 8px;
+}
+
+.mode-card .btn {
+    background: white;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.mode-card .btn:hover {
+    background: #f0f0f0;
+}
+
+.mode-label.mode-proxy {
+    background: #22c55e !important;
+    color: white !important;
+}
+
+.mode-label.mode-standalone {
+    background: #f59e0b !important;
+    color: white !important;
+}
+
+/* ============================================================================
+   Mode Selector (配置页)
+   ============================================================================ */
+
+.mode-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.mode-option {
+    cursor: pointer;
+}
+
+.mode-option input {
+    display: none;
+}
+
+.mode-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background: var(--gray-50);
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius);
+    transition: all 0.2s;
+}
+
+.mode-option:hover .mode-card {
+    border-color: var(--primary);
+    background: #eff6ff;
+}
+
+.mode-option input:checked + .mode-card {
+    border-color: var(--primary);
+    background: #eff6ff;
+}
+
+.mode-option.mode-active .mode-card {
+    border-color: var(--primary);
+    background: #eff6ff;
+}
+
+.mode-card .mode-icon {
+    font-size: 32px;
+}
+
+.mode-card .mode-info {
+    flex: 1;
+}
+
+.mode-card .mode-name {
+    display: block;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.mode-card .mode-desc {
+    display: block;
+    font-size: 13px;
+    color: var(--gray-500);
+    margin-top: 4px;
+}
+
+.mode-card .mode-badge {
+    background: var(--success);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.mode-details {
+    margin-top: 20px;
+}
+
+.mode-detail-content {
+    padding: 20px;
+    background: var(--gray-50);
+    border-radius: var(--radius);
+}
+
+/* ============================================================================
    Navigation
    ============================================================================ */
 
