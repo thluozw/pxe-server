@@ -96,10 +96,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # ============================================================================
 WORKDIR ${BASE_DIR}
 
-# 启动顺序：先启动 WebUI，后台启动网络服务
-CMD python3 webui/app.py & \
-    scripts/start-services.sh & \
-    tail -f /dev/null
+# 启动顺序：先后台启动网络服务，再前台运行 WebUI
+CMD /app/scripts/start-services.sh & \
+    python3 /app/webui/app.py
 
 # 暴露端口
 EXPOSE 8080 67/udp 69/udp 2049/tcp 20048/tcp

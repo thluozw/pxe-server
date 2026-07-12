@@ -188,7 +188,8 @@ log_info "启动 rpc.mountd..."
 
 # xinetd (TFTP)
 log_info "启动 TFTP (xinetd)..."
-/usr/sbin/xinetd -dontfork 2>&1 || log_warn "TFTP xinetd 启动失败"
+/usr/sbin/xinetd -dontfork 2>&1 &
+sleep 1 || log_warn "TFTP xinetd 启动失败"
 
 sleep 2
 
@@ -237,6 +238,5 @@ log_info "客户端可以开始 PXE 启动了!"
 echo ""
 
 # ============================================================================
-# 保持运行
+# 服务已在后台启动，脚本退出（容器由 app.py 保持运行）
 # ============================================================================
-wait
