@@ -178,9 +178,14 @@ def get_service_status():
     status = {}
     for key, svc in services.items():
         if key == 'webui':
-            code, out, _ = run_cmd('curl -s http://localhost:8080 > /dev/null 2>&1 && echo running || echo stopped')
+            # WebUI 使用 curl 检测
+            code, out, err = run_cmd('curl -s http://localhost:' + str(WEBUI_PORT) + ' > /dev/null 2>&1 && echo running || echo stopped')
         else:
-            code, out, _ = run_cmd(f'netstat -tuln 2>/dev/null | grep -q ":{svc["port"]} " && echo running || echo stopped')
+            # 使用 /proc/net/* 检测端口
+            if svc['proto'] == 'UDP':
+                code, out, err = run_cmd('cat /proc/net/udp 2>/dev/null | awk "{print $2}" | cut -d: -f2 | grep -qi ' + format(svc['port'], '04x') + ' && echo running || echo stopped')
+            else:
+                code, out, err = run_cmd('cat /proc/net/tcp 2>/dev/null | awk "{print $2}" | cut -d: -f2 | grep -qi ' + format(svc['port'], '04x') + ' && echo running || echo stopped')
         status[key] = {
             'name': svc['name'],
             'port': svc['port'],
@@ -268,16 +273,27 @@ def extract_iso(filename):
 @app.route('/')
 def index():
     """主页 - 服务状态"""
-    status = get_service_status()
-    isos = get_iso_list()
-    config = load_config()
+    print("[DEBUG index] Loading page at", datetime.now())
     
+    # 加载配置
+    config = load_config()
+    print("[DEBUG index] Loaded config:", json.dumps(config))
+    
+    # 获取服务状态
+    status = get_service_status()
+    print("[DEBUG index] Got status:", status)
+    
+    # 获取 ISO 列表
+    isos = get_iso_list()
+    
+    # 获取系统信息
     code, uptime, _ = run_cmd('cat /proc/uptime | awk \'{print $1}\'')
     code, load, _ = run_cmd('cat /proc/loadavg')
     
     return render_template('index.html', 
                            status=status,
                            isos=isos,
+                           config=config,
                            server_ip=config.get('server_ip', SERVER_IP),
                            uptime=uptime.strip() if uptime else 'N/A',
                            load=load.strip() if load else 'N/A')
@@ -407,7 +423,10 @@ def save_mode_config():
 @app.route('/api/status')
 def api_status():
     """API: 获取服务状态"""
-    return jsonify(get_service_status())
+    print("[DEBUG api_status] Request received at", datetime.now())
+    status = get_service_status()
+    print("[DEBUG api_status] Returning:", status)
+    return jsonify(status)
 
 @app.route('/api/isos')
 def api_isos():
@@ -417,7 +436,10 @@ def api_isos():
 @app.route('/api/config')
 def api_config():
     """API: 获取配置"""
-    return jsonify(load_config())
+    print("[DEBUG api_config] Request received at", datetime.now())
+    config = load_config()
+    print("[DEBUG api_config] Returning:", config)
+    return jsonify(config)
 
 @app.route('/api/logs')
 def api_logs():
