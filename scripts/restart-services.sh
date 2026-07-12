@@ -6,6 +6,9 @@
 
 set -e
 
+# 确保 PATH 包含必要的二进制目录
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 CONFIG_FILE="/app/config/server.conf"
 SERVER_IP=${SERVER_IP:-192.168.8.4}
 
@@ -68,15 +71,15 @@ log_info "DHCP 模式: $DHCP_MODE"
 log_info "停止现有服务..."
 
 # 停止 DHCP
-pkill -HUP dhcpd 2>/dev/null || true
-pkill dhcpd 2>/dev/null || true
+/usr/sbin/pkill -HUP dhcpd 2>/dev/null || true
+/usr/sbin/pkill dhcpd 2>/dev/null || true
 
 # 停止 NFS
-rpc.nfsd 0 2>/dev/null || true
-rpc.mountd --no-notify 2>/dev/null || true
+/usr/sbin/rpc.nfsd 0 2>/dev/null || true
+/usr/sbin/rpc.mountd --no-notify 2>/dev/null || true
 
 # 停止 xinetd (TFTP)
-pkill xinetd 2>/dev/null || true
+/usr/sbin/pkill xinetd 2>/dev/null || true
 
 sleep 2
 
@@ -94,11 +97,16 @@ if [ "$DHCP_MODE" = "proxy" ]; then
 # 只处理 PXE 引导请求
 authoritative;
 ddns-update-style none;
+default-lease-time 600;
+max-lease-time 7200;
 log-facility local7;
 
-# Proxy 模式配置
-# 注意：这个配置需要与主 DHCP 服务器配合使用
-# 主 DHCP 服务器分配 IP，本服务器添加 PXE 选项
+# Proxy 模式需要 subnet 声明才能启动
+subnet ${SUBNET_NETWORK} netmask ${SUBNET_MASK} {
+    # Proxy 模式：IP 由主 DHCP 分配，这里只提供 PXE 选项
+    option routers ${GATEWAY};
+    option subnet-mask ${SUBNET_MASK};
+}
 EOF
     log_info "Proxy 模式：需要主 DHCP 服务器配合"
 else
@@ -133,27 +141,28 @@ fi
 log_info "启动服务..."
 
 # rpcbind
-rpcbind || true
+/usr/sbin/rpcbind || true
 sleep 1
 
 # exportfs
-exportfs -ra
+/usr/sbin/exportfs -ra || true
 
 # rpc.nfsd
-rpc.nfsd 8
+/usr/sbin/rpc.nfsd 8 || true
 
 # rpc.mountd
-rpc.mountd
+/usr/sbin/rpc.mountd || true
 
 # xinetd (TFTP)
-xinetd -dontfork &
+/usr/sbin/xinetd -dontfork 2>&1 || log_warn "TFTP 启动失败"
 
 sleep 2
 
 # DHCP
-touch /var/lib/dhcp/dhcpd.leases
-chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
-dhcpd -cf /etc/dhcp/dhcpd.conf 2>&1 | tee /tmp/dhcp-startup.log || log_warn "DHCP 启动完成(可能有警告)"
+/usr/sbin/touch /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+/usr/sbin/chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+/usr/sbin/dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 || log_warn "DHCP 配置测试失败"
+/usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf 2>&1 | tee /tmp/dhcp-startup.log || log_warn "DHCP 启动完成(可能有警告)"
 
 echo ""
 echo "=============================================="

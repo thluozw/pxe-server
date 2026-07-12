@@ -166,33 +166,55 @@ subnet {subnet_network} netmask {subnet_mask} {{
     return config
 
 def get_service_status():
-    """获取服务状态"""
+    """获取服务状态 - 使用 Python 直接读取 /proc/net"""
+    def check_port_py(port, proto='udp'):
+        """直接用 Python 读取 /proc/net 检测端口"""
+        path = f'/proc/net/{proto}'
+        try:
+            with open(path) as f:
+                lines = f.readlines()
+            port_hex = format(port, '04X').upper()
+            for line in lines[1:]:  # skip header
+                parts = line.split()
+                if len(parts) > 1:
+                    local_addr = parts[1]
+                    if ':' in local_addr:
+                        addr_port = local_addr.split(':')[-1].strip().upper()
+                        if addr_port == port_hex:
+                            return True
+            return False
+        except:
+            return False
+    
     services = {
-        'dhcp': {'name': 'DHCP Server', 'port': 67, 'proto': 'UDP'},
-        'tftp': {'name': 'TFTP Server', 'port': 69, 'proto': 'UDP'},
-        'nfs': {'name': 'NFS Server', 'port': 2049, 'proto': 'TCP'},
-        'mountd': {'name': 'Mountd', 'port': 20048, 'proto': 'TCP'},
-        'webui': {'name': 'WebUI', 'port': WEBUI_PORT, 'proto': 'TCP'},
+        'dhcp': {'name': 'DHCP Server', 'port': 67, 'proto': 'udp'},
+        'tftp': {'name': 'TFTP Server', 'port': 69, 'proto': 'udp'},
+        'nfs': {'name': 'NFS Server', 'port': 2049, 'proto': 'tcp'},
+        'mountd': {'name': 'Mountd', 'port': 20048, 'proto': 'tcp'},
+        'webui': {'name': 'WebUI', 'port': WEBUI_PORT, 'proto': 'tcp'},
     }
     
     status = {}
     for key, svc in services.items():
         if key == 'webui':
-            # WebUI 使用 curl 检测
-            code, out, err = run_cmd('curl -s http://localhost:' + str(WEBUI_PORT) + ' > /dev/null 2>&1 && echo running || echo stopped')
+            # WebUI 使用本地 HTTP 检测
+            try:
+                import urllib.request
+                urllib.request.urlopen(f'http://localhost:{svc["port"]}/', timeout=2)
+                svc_status = 'running'
+            except:
+                svc_status = 'stopped'
         else:
-            # 使用 /proc/net/* 检测端口
-            if svc['proto'] == 'UDP':
-                code, out, err = run_cmd('cat /proc/net/udp 2>/dev/null | awk "{print $2}" | cut -d: -f2 | grep -qi ' + format(svc['port'], '04x') + ' && echo running || echo stopped')
-            else:
-                code, out, err = run_cmd('cat /proc/net/tcp 2>/dev/null | awk "{print $2}" | cut -d: -f2 | grep -qi ' + format(svc['port'], '04x') + ' && echo running || echo stopped')
+            svc_status = 'running' if check_port_py(svc['port'], svc['proto']) else 'stopped'
+        
         status[key] = {
             'name': svc['name'],
             'port': svc['port'],
-            'proto': svc['proto'],
-            'status': 'running' if 'running' in out else 'stopped'
+            'proto': svc['proto'].upper(),
+            'status': svc_status
         }
     
+    print(f"[DEBUG get_service_status] {status}")
     return status
 
 def get_iso_list():

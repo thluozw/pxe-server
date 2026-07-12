@@ -6,6 +6,9 @@
 
 set -e
 
+# 确保 PATH 包含必要的二进制目录
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 CONFIG_FILE="/app/config/server.conf"
 BASE_DIR=${BASE_DIR:-/app}
 
@@ -104,10 +107,18 @@ if [ "$DHCP_MODE" = "proxy" ]; then
 
 authoritative;
 ddns-update-style none;
+default-lease-time 600;
+max-lease-time 7200;
 log-facility local7;
 
-# 注意：Proxy 模式下，客户端从主 DHCP 获取 IP
-# 本服务器通过 DHCP 响应注入 PXE 选项
+# Proxy 模式需要 subnet 声明才能启动
+# 但这里只转发 PXE 请求，不分配 IP
+subnet ${SUBNET_NETWORK} netmask ${SUBNET_MASK} {
+    # Proxy 模式：IP 由主 DHCP 分配，这里只提供 PXE 选项
+    # 不设置 range，客户端从主 DHCP 获取 IP
+    option routers ${GATEWAY};
+    option subnet-mask ${SUBNET_MASK};
+}
 EOF
     log_warn "Proxy 模式：需要主 DHCP 服务器配合"
     log_info "  - 主 DHCP 服务器分配 IP 地址"
@@ -160,39 +171,42 @@ log_info "启动服务..."
 
 # rpcbind
 log_info "启动 rpcbind..."
-rpcbind || true
+/usr/sbin/rpcbind || true
 sleep 1
 
 # exportfs
 log_info "启动 NFS (exportfs)..."
-exportfs -ra
+/usr/sbin/exportfs -ra || true
 
 # rpc.nfsd
 log_info "启动 rpc.nfsd..."
-rpc.nfsd 8
+/usr/sbin/rpc.nfsd 8 || true
 
 # rpc.mountd
 log_info "启动 rpc.mountd..."
-rpc.mountd
+/usr/sbin/rpc.mountd || true
 
 # xinetd (TFTP)
 log_info "启动 TFTP (xinetd)..."
-xinetd -dontfork &
+/usr/sbin/xinetd -dontfork 2>&1 || log_warn "TFTP xinetd 启动失败"
 
 sleep 2
 
 # DHCP
 log_info "启动 DHCP Server..."
-touch /var/lib/dhcp/dhcpd.leases
-chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+/usr/sbin/touch /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
+/usr/sbin/chmod 644 /var/lib/dhcp/dhcpd.leases 2>/dev/null || true
 
-if [ "$DHCP_MODE" = "proxy" ]; then
-    log_warn "Proxy 模式：DHCP 服务器只处理 PXE 请求"
-    # Proxy 模式下，DHCP 配置可能不完整，跳过错误检查
-    dhcpd -cf /etc/dhcp/dhcpd.conf 2>&1 | head -5 || true
-else
-    dhcpd -cf /etc/dhcp/dhcpd.conf || log_warn "DHCP 启动可能有错误，请检查配置"
+# 验证配置文件存在
+if [ ! -f /etc/dhcp/dhcpd.conf ]; then
+    log_warn "DHCP 配置文件不存在"
 fi
+
+# 测试 DHCP 配置
+/usr/sbin/dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 || log_warn "DHCP 配置测试失败"
+
+# 启动 DHCP（分离模式）
+/usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf 2>&1 || log_warn "DHCP 服务启动失败，请检查日志"
 
 echo ""
 echo "=============================================="
