@@ -40,10 +40,31 @@ body {
    Mode Card (首页模式显示)
    ============================================================================ */
 
-.mode-card {
-    background: linear-gradient(135deg, #1e3a5f, #2563eb);
-    color: white;
+/* 首页模式卡片 - 深色渐变背景 */
+.mode-card-home {
+    background: linear-gradient(135deg, #1e3a5f, #2563eb) !important;
+    color: white !important;
     padding: 24px;
+}
+
+.mode-card-home h2 {
+    color: white !important;
+}
+
+.mode-card-home .mode-desc {
+    color: rgba(255,255,255,0.85) !important;
+}
+
+/* 配置页模式选择器卡片 */
+.mode-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background: var(--gray-50);
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius);
+    transition: all 0.2s;
 }
 
 .mode-card h2 {

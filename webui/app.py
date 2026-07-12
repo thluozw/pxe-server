@@ -445,7 +445,7 @@ def service_control(action):
     try:
         if action == 'start':
             # 启动所有 PXE 服务
-            code, out, err = run_cmd('bash /scripts/start-services.sh', timeout=60)
+            code, out, err = run_cmd('bash /app/scripts/start-services.sh', timeout=60)
             if code == 0:
                 return jsonify({'success': True, 'message': '所有服务已启动'})
             else:
@@ -458,7 +458,7 @@ def service_control(action):
         
         elif action == 'restart':
             # 重启所有 PXE 服务
-            code, out, err = run_cmd('bash /scripts/restart-services.sh', timeout=90)
+            code, out, err = run_cmd('bash /app/scripts/restart-services.sh', timeout=90)
             if code == 0:
                 return jsonify({'success': True, 'message': '所有服务已重启'})
             else:
