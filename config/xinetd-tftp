@@ -1,0 +1,17 @@
+# TFTP Server Configuration (xinetd mode)
+# Serves PXE boot files
+
+service tftp
+{
+    protocol        = udp
+    port            = 69
+    socket_type     = dgram
+    wait            = yes
+    user            = root
+    server          = /usr/sbin/in.tftpd
+    server_args     = -v -s /tftpboot
+    disable         = no
+    per_source      = 11
+    cps             = 100 2
+    flags           = IPv4
+}

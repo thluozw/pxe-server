@@ -1,0 +1,11 @@
+# NFS Exports Configuration
+# NFS share for PXE clients to mount ISO contents
+
+# /nfsroot - Read-only NFS share for PXE boot
+# - ro: read-only access
+# - no_subtree_check: disable subtree checking for security
+# - no_root_squash: allow root access from clients
+# - async: asynchronous writes for better performance
+# - insecure: allow access from ports > 1024 (needed for some clients)
+
+/nfsroot          *(ro,sync,no_subtree_check,no_root_squash,async,insecure)

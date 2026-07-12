@@ -1,0 +1,85 @@
+# ============================================================================
+# Fnos PXE Server - Docker Compose Configuration
+# ============================================================================
+# 
+# 使用方法:
+#   1. 将 Fnos ISO 文件放入 ./data/iso/ 目录
+#   2. 运行: docker-compose up -d
+#   3. 查看日志: docker-compose logs -f
+#   4. 客户端 PXE 启动
+#
+# 注意:
+#   - 必须使用 host 网络模式 (PXE 需要广播)
+#   - 需要 privileged 权限 (NFS/TFTP/DHCP)
+#   - 服务端 IP 需要与客户端在同一网段
+# ============================================================================
+
+services:
+  pxe-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fnos-pxe-server:latest
+    container_name: fnos-pxe-server
+    
+    # 使用 host 网络模式 - PXE 需要
+    network_mode: host
+    
+    # 特权模式 - 需要访问网络服务
+    privileged: true
+    
+    # 环境变量配置
+    environment:
+      # 服务器 IP (修改为你的 Armbian IP)
+      SERVER_IP: "192.168.8.4"
+      
+      # 子网配置
+      SUBNET_MASK: "255.255.255.0"
+      SUBNET_NETWORK: "192.168.8.0"
+      SUBNET_BROADCAST: "192.168.8.255"
+      
+      # DHCP 范围
+      DHCP_RANGE_START: "192.168.8.100"
+      DHCP_RANGE_END: "192.168.8.200"
+      
+      # PXE 启动文件名 (根据 ISO 自动设置)
+      # BOOT_FILE: "fnos/linux"
+    
+    # 端口映射 (仅用于管理，非 PXE 必须)
+    # ports:
+    #   - "67:67/udp"    # DHCP
+    #   - "69:69/udp"    # TFTP
+    #   - "2049:2049/tcp" # NFS
+    #   - "20048:20048/tcp" # mountd
+    
+    # 卷挂载
+    volumes:
+      # ISO 文件目录 (放入 Fnos ISO)
+      - ./data/iso:/iso:ro
+      
+      # TFTP boot 文件 (可选，覆盖)
+      - ./data/boot:/tftpboot:ro
+      
+      # NFS 共享目录 (可选，预准备内容)
+      - ./data/nfs:/nfsroot:rw
+      
+      # 配置文件 (可选)
+      # - ./config/custom-exports:/etc/exports:ro
+    
+    # 重启策略
+    restart: unless-stopped
+    
+    # 健康检查
+    healthcheck:
+      test: ["/scripts/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
