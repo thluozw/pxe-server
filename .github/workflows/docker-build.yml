@@ -34,44 +34,23 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata (GHCR)
-        id: meta-ghcr
+      - name: Extract metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: |
+            ghcr.io/${{ github.repository }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server
           tags: |
             type=raw,value=latest
             type=raw,value=${{ github.sha }}
 
-      - name: Extract metadata (DockerHub)
-        id: meta-dockerhub
-        if: secrets.DOCKERHUB_USERNAME != ''
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server
-          tags: |
-            type=raw,value=latest
-            type=raw,value=${{ github.sha }}
-
-      # Build and Push to GHCR
-      - name: Build and Push to GHCR
+      - name: Build and Push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta-ghcr.outputs.tags }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # Build and Push to DockerHub
-      - name: Build and Push to DockerHub
-        if: secrets.DOCKERHUB_USERNAME != ''
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta-dockerhub.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -85,7 +64,5 @@ jobs:
           echo "- ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### DockerHub:" >> $GITHUB_STEP_SUMMARY
-          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
-            echo "- ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server:latest" >> $GITHUB_STEP_SUMMARY
-            echo "- ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "- ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server:latest" >> $GITHUB_STEP_SUMMARY
+          echo "- ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
