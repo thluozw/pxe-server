@@ -196,13 +196,11 @@ def get_service_status():
     status = {}
     for key, svc in services.items():
         if key == 'webui':
-            # WebUI: check via local HTTP request.
-            try:
-                import urllib.request
-                urllib.request.urlopen('http://localhost:%d/' % svc['port'], timeout=2)
-                svc_status = 'running'
-            except Exception:
-                svc_status = 'stopped'
+            # WebUI is obviously running if this code is executing.
+            # Do NOT self-request over HTTP: get_service_status() is called
+            # by the '/' and '/api/status' handlers, so an HTTP self-check
+            # would recurse and create a connection storm.
+            svc_status = 'running'
         else:
             svc_status = 'running' if check_port_py(svc['port'], svc['proto']) else 'stopped'
 
