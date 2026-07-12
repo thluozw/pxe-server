@@ -29,11 +29,11 @@ jobs:
 
       # DockerHub (仅当 secrets 配置时)
       - name: Login to Docker Hub
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Extract metadata
         id: meta
@@ -41,7 +41,6 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}
-            ${{ github.repository_owner }}/pxe-server
           tags: |
             type=raw,value=latest
             type=raw,value=${{ github.sha }}
@@ -60,6 +59,13 @@ jobs:
         run: |
           echo "## Image Built Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Images:" >> $GITHUB_STEP_SUMMARY
+          echo "### GitHub Container Registry:" >> $GITHUB_STEP_SUMMARY
           echo "- ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
           echo "- ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### DockerHub:" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "- ${{ secrets.DOCKERHUB_USERNAME }}/pxe-server (configured)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Not configured. Add DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets to enable." >> $GITHUB_STEP_SUMMARY
+          fi
